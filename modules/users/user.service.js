@@ -42,6 +42,7 @@ exports.login = async (email, password) => {
   }
 
   const user = await userRepository.findUserByEmail(email);
+  // 사용자 존재 여부 검증
   if (!user) {
     throw new CustomError(
       INVALID_CREDENTIALS.statusCode,
@@ -50,6 +51,7 @@ exports.login = async (email, password) => {
   }
 
   const isPasswordValid = await bcrypt.compare(password, user.password);
+  // 비밀번호 검증
   if (!isPasswordValid) {
     throw new CustomError(
       INVALID_CREDENTIALS.statusCode,
@@ -58,6 +60,7 @@ exports.login = async (email, password) => {
   }
 
   const { password: _, ...userWithoutPassword } = user;
+  // 비밀번호 제외한 사용자 정보 반환
   return userWithoutPassword;
 };
 
