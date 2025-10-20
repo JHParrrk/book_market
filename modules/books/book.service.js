@@ -11,11 +11,14 @@ exports.getNewBooks = (filters) => bookRepository.findNewBooks(filters);
 // [신규] 도서 총 개수 조회 로직
 exports.getBooksCount = (filters) => bookRepository.countBooks(filters);
 
-// [수정] 도서 상세 조회 (books와 book_details를 모두 조회)
+// [수정] 도서 상세 조회 및 에러 처리 개선
 exports.getBookById = async (bookId, userId) => {
   const book = await bookRepository.findBookWithDetailById(bookId, userId);
   if (!book) {
-    throw new CustomError(NOT_FOUND.statusCode, "도서를 찾을 수 없습니다.");
+    throw new CustomError(
+      NOT_FOUND.statusCode,
+      `해당 ID(${bookId})의 도서를 찾을 수 없습니다.`
+    );
   }
   return book;
 };

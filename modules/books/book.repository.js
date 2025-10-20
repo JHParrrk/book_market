@@ -1,29 +1,41 @@
 const dbPool = require("../../database/connection/mariaDB");
+const {
+  DEFAULT_PAGE,
+  DEFAULT_LIMIT,
+  DEFAULT_NEW_BOOKS_LIMIT,
+} = require("./config");
 
-// [수정] 도서 검색 쿼리
+/**
+ * 카테고리 필터링 SQL 구문을 생성하고 파라미터를 추가하는 공통 함수
+ * @param {number} category_id - 카테고리 ID
+ * @param {Array} params - SQL 파라미터 배열
+ * @returns {string} - 생성된 SQL 필터링 구문
+ */
+const applyCategoryFilter = (category_id, params) => {
+  if (!category_id) return "";
+
+  params.push(category_id, category_id);
+  return ` AND b.category_id IN (
+            SELECT id FROM categories WHERE id = ? OR parent_id = ?
+          )`;
+};
+
 // [수정] 도서 검색 쿼리
 exports.searchBooks = async ({
   category_id,
   keyword,
-  page = 1,
-  limit = 10,
+  page = DEFAULT_PAGE,
+  limit = DEFAULT_LIMIT,
 }) => {
   let sql = `
-    SELECT b.id, b.title, b.author, b.image_url, b.price, b.summary, 
+    SELECT b.id, b.title, b.author, b.image_url, b.price, b.summary, b.published_date,
            (SELECT COUNT(*) FROM book_likes bl WHERE bl.book_id = b.id) AS likes
     FROM books b
     WHERE b.deleted_at IS NULL
   `;
   const params = [];
 
-  if (category_id) {
-    // category_id가 상위 카테고리일 경우, 모든 하위 카테고리를 포함하여 검색
-    // category_id가 하위 카테고리일 경우, 해당 카테고리만 검색
-    sql += ` AND b.category_id IN (
-              SELECT id FROM categories WHERE id = ? OR parent_id = ?
-            )`;
-    params.push(category_id, category_id);
-  }
+  sql += applyCategoryFilter(category_id, params);
 
   if (keyword) {
     sql += ` AND (b.title LIKE ? OR b.summary LIKE ? OR b.author LIKE ?)`;
@@ -33,45 +45,45 @@ exports.searchBooks = async ({
 
   const offset = (page - 1) * limit;
   sql += ` ORDER BY b.created_at DESC LIMIT ? OFFSET ?`;
-  params.push(parseInt(limit), parseInt(offset));
+  params.push(limit, offset);
 
   const [books] = await dbPool.query(sql, params);
   return { books };
 };
 
-// [신규] 신간 도서 조회 쿼리
-exports.findNewBooks = async ({ category_id }) => {
+// [수정] 신간 도서 조회 쿼리
+exports.findNewBooks = async ({
+  category_id,
+  page = DEFAULT_PAGE,
+  limit = DEFAULT_NEW_BOOKS_LIMIT,
+}) => {
   let sql = `
-    SELECT id, title, author, image_url, price, summary 
-    FROM books 
-    WHERE deleted_at IS NULL
+    SELECT id, title, author, image_url, price, summary, published_date
+    FROM books b
+    WHERE b.deleted_at IS NULL
+      AND b.published_date BETWEEN DATE_SUB(NOW(), INTERVAL 1 MONTH) AND NOW()
   `;
   const params = [];
 
-  if (category_id) {
-    sql += ` AND category_id = ?`;
-    params.push(category_id);
-  }
+  sql += applyCategoryFilter(category_id, params);
 
-  sql += ` ORDER BY created_at DESC LIMIT 4`;
+  const offset = (page - 1) * limit;
+  sql += ` ORDER BY published_date DESC LIMIT ? OFFSET ?`;
+  params.push(limit, offset);
+
   const [books] = await dbPool.query(sql, params);
   return books;
 };
 
-// [신규] 도서 총 개수 조회 쿼리 (페이지네이션용)
+// [수정] 도서 총 개수 조회 쿼리
 exports.countBooks = async ({ category_id, keyword }) => {
-  let sql = `SELECT COUNT(*) as totalCount FROM books WHERE deleted_at IS NULL`;
+  let sql = `SELECT COUNT(*) as totalCount FROM books b WHERE b.deleted_at IS NULL`;
   const params = [];
 
-  if (category_id) {
-    sql += ` AND category_id IN (
-              SELECT id FROM categories WHERE id = ? OR parent_id = ?
-            )`;
-    params.push(category_id, category_id);
-  }
+  sql += applyCategoryFilter(category_id, params);
 
   if (keyword) {
-    sql += ` AND (title LIKE ? OR summary LIKE ? OR author LIKE ?)`;
+    sql += ` AND (b.title LIKE ? OR b.summary LIKE ? OR b.author LIKE ?)`;
     const searchTerm = `%${keyword}%`;
     params.push(searchTerm, searchTerm, searchTerm);
   }
@@ -84,7 +96,7 @@ exports.countBooks = async ({ category_id, keyword }) => {
 exports.findBookWithDetailById = async (bookId, userId) => {
   const sql = `
     SELECT 
-        b.id, b.category_id, b.title, b.author, b.price, b.image_url, b.summary,
+        b.id, b.category_id, b.title, b.author, b.price, b.image_url, b.summary, b.published_date,
         bd.isbn, bd.description, bd.table_of_contents, bd.form,
         c.name AS category_name, 
         EXISTS(SELECT 1 FROM book_likes bl WHERE bl.book_id = b.id AND bl.user_id = ?) AS isLiked

@@ -1,9 +1,13 @@
 const bookService = require("./book.service");
+const safeParseInt = require("../utils/safeParseInt");
 
-// [수정] 도서 검색 (기존 getBooks 대체)
+// [수정] 도서 검색 (메인 페이지 등)
 exports.searchBooks = async (req, res, next) => {
   try {
-    const { category_id, keyword, page = 1, limit = 10 } = req.query;
+    const { category_id, keyword } = req.query;
+    const page = safeParseInt(req.query.page, 1);
+    const limit = safeParseInt(req.query.limit, 8);
+
     const { books, pagination } = await bookService.searchBooks({
       category_id,
       keyword,
@@ -16,11 +20,18 @@ exports.searchBooks = async (req, res, next) => {
   }
 };
 
-// [신규] 신간 도서 조회
+// [수정] 신간 도서 조회
 exports.getNewBooks = async (req, res, next) => {
   try {
     const { category_id } = req.query;
-    const books = await bookService.getNewBooks({ category_id });
+    const page = safeParseInt(req.query.page, 1);
+    const limit = safeParseInt(req.query.limit, 4);
+
+    const books = await bookService.getNewBooks({
+      category_id,
+      page,
+      limit,
+    });
     res.status(200).json({ books });
   } catch (err) {
     next(err);
@@ -41,7 +52,7 @@ exports.getBooksCount = async (req, res, next) => {
   }
 };
 
-// 도서 상세 조회 (DB 분리에 따라 Service/Repository 수정 필요)
+// 도서 상세 조회
 exports.getBookById = async (req, res, next) => {
   try {
     const { bookId } = req.params;
