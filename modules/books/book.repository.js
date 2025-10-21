@@ -3,7 +3,7 @@ const {
   DEFAULT_PAGE,
   DEFAULT_LIMIT,
   DEFAULT_NEW_BOOKS_LIMIT,
-} = require("./config");
+} = require("../../config.js");
 
 /**
  * 카테고리 필터링 SQL 구문을 생성하고 파라미터를 추가하는 공통 함수

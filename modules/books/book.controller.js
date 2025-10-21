@@ -1,5 +1,5 @@
 const bookService = require("./book.service");
-const safeParseInt = require("../utils/safeParseInt");
+const safeParseInt = require("../../utils/safeParseInt");
 
 // [수정] 도서 검색 (메인 페이지 등)
 exports.searchBooks = async (req, res, next) => {
