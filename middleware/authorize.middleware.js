@@ -1,3 +1,5 @@
+// book_market/middleware/authorize.middleware.js
+
 const jwt = require("jsonwebtoken");
 const { CustomError } = require("../utils/errorHandler.util"); // CustomError는 utils에서 가져옴
 const { UNAUTHORIZED, FORBIDDEN } = require("../constants/errors");
@@ -14,6 +16,7 @@ function authenticateJWT(req, res, next) {
     );
   }
 
+  // Bearer 키워드 제거 후 토큰 추출
   const token = authHeader.split(" ")[1];
 
   try {

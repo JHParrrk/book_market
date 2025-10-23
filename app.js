@@ -32,8 +32,6 @@ app.use(cookieParser());
 // → 요청의 쿠키를 쉽게 쓸 수 있도록 req.cookies에 객체로 넣어줌
 app.use(express.static(path.join(__dirname, "public")));
 // → public 폴더 안의 파일을 정적 파일(이미지, CSS 등)로 제공
-app.use(errorHandler);
-// 에러 핸들러 등록
 
 // 라우터 설정
 app.use("/", indexRouter);

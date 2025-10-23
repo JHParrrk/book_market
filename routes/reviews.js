@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const reviewController = require("../modules/reviews/review.controller");
-const { authenticateJWT } = require("../middleware/auth.middleware");
+const { authenticateJWT } = require("../middleware/authorize.middleware");
 
 // 도서 리뷰 작성
 router.post("/:bookId/reviews", authenticateJWT, reviewController.addReview);

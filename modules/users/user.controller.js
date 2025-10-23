@@ -9,6 +9,7 @@ const {
   NOT_FOUND,
   NO_INFORMATION_TO_UPDATE,
   REFRESH_TOKEN_REQUIRED,
+  BAD_REQUEST,
 } = require("../../constants/errors");
 
 // 회원가입
@@ -29,9 +30,8 @@ exports.login = async (req, res, next) => {
     const { email, password } = req.body;
     const user = await userService.login(email, password);
 
-    const payload = { id: user.id, email: user.email };
-    const accessToken = generateAccessToken(payload);
-    const refreshToken = generateRefreshToken(payload);
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
 
     await userService.saveRefreshToken(user.id, refreshToken);
 
@@ -65,17 +65,23 @@ exports.getMe = async (req, res, next) => {
 exports.getUserById = async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
-    if (req.user.id !== id) {
+
+    // [개선] 관리자가 아닌 경우에만, 본인 정보인지 확인합니다.
+    // 관리자(admin)는 모든 사용자의 정보를 조회할 수 있어야 합니다.
+    if (req.user.role !== "admin" && req.user.id !== id) {
       return next(
         new CustomError(
           FORBIDDEN.statusCode,
-          "You can only view your own profile."
+          "자신의 프로필만 조회할 수 있습니다."
         )
       );
     }
+
     const user = await userService.findUserById(id);
     if (!user) {
-      return next(new CustomError(NOT_FOUND.statusCode, NOT_FOUND.message));
+      return next(
+        new CustomError(NOT_FOUND.statusCode, "해당 사용자를 찾을 수 없습니다.")
+      );
     }
     res.status(200).json({ user });
   } catch (err) {
@@ -87,7 +93,9 @@ exports.getUserById = async (req, res, next) => {
 exports.updateUser = async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
-    if (req.user.id !== id) {
+
+    // 관리자가 아닌 경우에만, 본인 정보인지 확인합니다.
+    if (req.user.role !== "admin" && req.user.id !== id) {
       return next(
         new CustomError(
           FORBIDDEN.statusCode,
@@ -95,6 +103,7 @@ exports.updateUser = async (req, res, next) => {
         )
       );
     }
+
     if (Object.keys(req.body).length === 0) {
       return next(
         new CustomError(
@@ -103,6 +112,7 @@ exports.updateUser = async (req, res, next) => {
         )
       );
     }
+
     const updatedUser = await userService.updateUser(id, req.body);
     res
       .status(200)
@@ -172,10 +182,43 @@ exports.refreshAccessToken = async (req, res, next) => {
 // 전체 사용자 조회 (예시 - 관리자용)
 exports.getAllUsers = async (req, res, next) => {
   try {
-    // 실제로는 여기에 관리자 권한인지 확인하는 로직이 추가되어야 함
-    // if (req.user.role !== 'admin') { ... }
+    // [정리] 미들웨어에서 권한을 검증하므로, 컨트롤러 내의 if문은 필요 없습니다.
     const users = await userService.getAllUsers();
     res.status(200).json({ users });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * [신규] 특정 사용자의 역할을 변경하는 핸들러 (관리자용)
+ */
+exports.updateUserRole = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const { role } = req.body;
+
+    // 1. 입력값 검증
+    if (!role || (role !== "member" && role !== "admin")) {
+      throw new CustomError(
+        BAD_REQUEST.statusCode,
+        "유효하지 않은 역할입니다. 'user' 또는 'admin'만 가능합니다."
+      );
+    }
+
+    // 2. 자기 자신의 역할을 변경하는 것을 방지 (선택 사항이지만 권장)
+    if (req.user.id === parseInt(userId, 10)) {
+      throw new CustomError(
+        FORBIDDEN.statusCode,
+        "자기 자신의 역할은 변경할 수 없습니다."
+      );
+    }
+
+    await userService.updateUserRole(userId, role);
+
+    res
+      .status(200)
+      .json({ message: "사용자 역할이 성공적으로 변경되었습니다." });
   } catch (err) {
     next(err);
   }

@@ -3,8 +3,21 @@ const cartService = require("./cart.service");
 exports.addToCart = async (req, res, next) => {
   try {
     const { book_id, quantity } = req.body;
+
+    // [개선] 입력값 검증
+    if (!book_id || !quantity || Number(quantity) < 1) {
+      throw new CustomError(
+        BAD_REQUEST.statusCode,
+        "도서 ID와 1 이상의 수량을 정확히 입력해주세요."
+      );
+    }
+
     const userId = req.user.id;
-    await cartService.addToCart({ userId, book_id, quantity });
+    await cartService.addToCart({
+      userId,
+      book_id,
+      quantity: Number(quantity),
+    });
     res.status(201).json({ message: "장바구니에 상품을 담았습니다." });
   } catch (err) {
     next(err);
@@ -25,14 +38,26 @@ exports.updateCartItem = async (req, res, next) => {
   try {
     const { cartItemId } = req.params;
     const { quantity } = req.body;
+
+    // [개선] 입력값 검증
+    if (!quantity || Number(quantity) < 1) {
+      throw new CustomError(
+        BAD_REQUEST.statusCode,
+        "1 이상의 수량을 정확히 입력해주세요."
+      );
+    }
+
     const userId = req.user.id;
-    await cartService.updateCartItem({ cartItemId, quantity, userId });
+    await cartService.updateCartItem({
+      cartItemId,
+      quantity: Number(quantity),
+      userId,
+    });
     res.status(200).json({ message: "상품 수량이 변경되었습니다." });
   } catch (err) {
     next(err);
   }
 };
-
 exports.removeCartItem = async (req, res, next) => {
   try {
     const { cartItemId } = req.params;

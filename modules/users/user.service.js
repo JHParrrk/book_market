@@ -20,7 +20,7 @@ exports.register = async ({ email, password, name, address, phone_number }) => {
     );
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10); // 비밀번호 해싱
+  const hashedPassword = await bcrypt.hash(password, 10);
 
   const userId = await userRepository.createUser({
     email,
@@ -42,7 +42,6 @@ exports.login = async (email, password) => {
   }
 
   const user = await userRepository.findUserByEmail(email);
-  // 사용자 존재 여부 검증
   if (!user) {
     throw new CustomError(
       INVALID_CREDENTIALS.statusCode,
@@ -51,7 +50,6 @@ exports.login = async (email, password) => {
   }
 
   const isPasswordValid = await bcrypt.compare(password, user.password);
-  // 비밀번호 검증
   if (!isPasswordValid) {
     throw new CustomError(
       INVALID_CREDENTIALS.statusCode,
@@ -60,7 +58,6 @@ exports.login = async (email, password) => {
   }
 
   const { password: _, ...userWithoutPassword } = user;
-  // 비밀번호 제외한 사용자 정보 반환
   return userWithoutPassword;
 };
 
@@ -73,25 +70,65 @@ exports.updateUser = async (id, updateData) => {
   return userRepository.findUserById(id);
 };
 
-// 액세스 토큰 재발급
-exports.refreshAccessToken = async (refreshToken) => {
-  const tokenRecord = await userRepository.findRefreshToken(refreshToken);
-  if (!tokenRecord || new Date(tokenRecord.expires_at) <= new Date()) {
-    await userRepository.deleteRefreshToken(refreshToken); // 만료된 토큰은 DB에서 삭제
+// 특정 사용자의 역할을 변경하는 서비스
+exports.updateUserRole = async (userId, role) => {
+  const user = await userRepository.findUserById(userId);
+  if (!user) {
     throw new CustomError(
-      INVALID_OR_EXPIRED_REFRESH_TOKEN.statusCode,
-      INVALID_OR_EXPIRED_REFRESH_TOKEN.message
+      NOT_FOUND.statusCode,
+      "해당 사용자를 찾을 수 없습니다."
     );
   }
 
-  const decoded = jwt.verify(refreshToken, process.env.REFRESH_SECRET_KEY);
-  const user = await userRepository.findUserById(decoded.id);
-  if (!user) {
-    throw new CustomError(NOT_FOUND.statusCode, "User not found.");
+  const affectedRows = await userRepository.updateUserRole(userId, role);
+  if (affectedRows === 0) {
+    throw new Error("역할 업데이트에 실패했습니다.");
+  }
+};
+
+// 액세스 토큰 재발급
+exports.refreshAccessToken = async (refreshToken) => {
+  const tokenRecord = await userRepository.findAndDeleteRefreshToken(
+    refreshToken
+  );
+
+  // [수정] 레파지토리에서 null을 반환하면, 여기서 404 에러를 생성합니다.
+  if (!tokenRecord) {
+    throw new CustomError(
+      NOT_FOUND.statusCode,
+      "유효하지 않거나 이미 사용된 리프레시 토큰입니다."
+    );
   }
 
-  const payload = { id: user.id, email: user.email };
-  return generateAccessToken(payload);
+  if (new Date(tokenRecord.expires_at) <= new Date()) {
+    throw new CustomError(
+      INVALID_OR_EXPIRED_REFRESH_TOKEN.statusCode,
+      "만료된 리프레시 토큰입니다. 다시 로그인해주세요."
+    );
+  }
+
+  const user = await userRepository.findUserById(tokenRecord.user_id);
+  if (!user) {
+    throw new CustomError(NOT_FOUND.statusCode, "사용자를 찾을 수 없습니다.");
+  }
+
+  return generateAccessToken(user);
+};
+
+// [신규] 로그아웃 시 리프레시 토큰을 삭제하는 서비스 함수
+exports.deleteRefreshToken = async (token) => {
+  // 토큰이 존재할 경우에만 삭제를 시도합니다.
+  // findAndDeleteRefreshToken은 토큰이 없으면 에러를 던지므로,
+  // 로그아웃 시에는 에러를 무시하고 싶을 수 있습니다.
+  try {
+    await userRepository.findAndDeleteRefreshToken(token);
+  } catch (error) {
+    // 토큰이 이미 없거나 유효하지 않은 경우, 에러를 무시하고 정상 처리합니다.
+    // 로그아웃은 사용자가 이미 유효하지 않은 토큰을 가지고 있더라도 성공해야 합니다.
+    console.log(
+      "Token for logout not found or already deleted, which is acceptable."
+    );
+  }
 };
 
 // 단순 조회/삭제는 Repository를 그대로 호출
@@ -100,5 +137,3 @@ exports.getAllUsers = () => userRepository.getAllUsers();
 exports.deleteUser = (id) => userRepository.deleteUser(id);
 exports.saveRefreshToken = (userId, token) =>
   userRepository.saveRefreshToken(userId, token);
-exports.deleteRefreshToken = (token) =>
-  userRepository.deleteRefreshToken(token);

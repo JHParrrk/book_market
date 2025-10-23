@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const cartController = require("../modules/carts/cart.controller");
-const { authenticateJWT } = require("../middleware/auth.middleware");
+const { authenticateJWT } = require("../middleware/authorize.middleware");
 
 // 장바구니 상품 추가
 router.post("/", authenticateJWT, cartController.addToCart);

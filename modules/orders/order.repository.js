@@ -1,44 +1,80 @@
 const dbPool = require("../../database/connection/mariaDB");
+const { CustomError } = require("../../utils/errorHandler.util");
+const { NOT_FOUND } = require("../../constants/errors");
+const { ORDER_STATUS } = require("../../constants/orderStatus");
 
-// 트랜잭션 처리가 필요한 복잡한 로직
+/**
+ * 사용자의 장바구니에서 주문할 상품 정보를 조회 (소유권 검증 포함)
+ */
+const findCartItemsForOrder = async (conn, userId, cartItemIds) => {
+  const sql = `
+    SELECT c.book_id, c.quantity, b.price 
+    FROM carts c 
+    JOIN books b ON c.book_id = b.id 
+    WHERE c.user_id = ? AND c.id IN (?) AND b.deleted_at IS NULL`;
+  const [items] = await conn.query(sql, [userId, cartItemIds]);
+
+  // [개선] CustomError 사용
+  if (items.length !== cartItemIds.length) {
+    throw new CustomError(
+      NOT_FOUND.statusCode,
+      "주문하려는 상품 중 일부가 장바구니에 없거나 품절되었습니다."
+    );
+  }
+  return items;
+};
+
+/**
+ * [신규] 주문 상세 정보를 bulk insert
+ */
+const insertOrderDetails = (conn, orderId, items) => {
+  const sql = `INSERT INTO order_details (order_id, book_id, quantity, price) VALUES ?`;
+  const values = items.map((item) => [
+    orderId,
+    item.book_id,
+    item.quantity,
+    item.price,
+  ]);
+  return conn.query(sql, [values]);
+};
+
+// 트랜잭션 처리
 exports.create = async ({ userId, delivery_info, cart_item_ids }) => {
   const conn = await dbPool.getConnection();
   try {
     await conn.beginTransaction();
 
-    // 1. 장바구니에서 주문할 상품 정보 조회
-    const cartSql = `SELECT book_id, quantity, price FROM carts c JOIN books b ON c.book_id = b.id WHERE c.id IN (?)`;
-    const [itemsToOrder] = await conn.query(cartSql, [cart_item_ids]);
+    const itemsToOrder = await findCartItemsForOrder(
+      conn,
+      userId,
+      cart_item_ids
+    );
+    if (itemsToOrder.length === 0) {
+      throw new CustomError(
+        NOT_FOUND.statusCode,
+        "주문할 상품이 장바구니에 없습니다."
+      );
+    }
 
-    // 2. 총 가격 계산
     const totalPrice = itemsToOrder.reduce(
       (acc, item) => acc + item.price * item.quantity,
       0
     );
 
-    // 3. orders 테이블에 주문 생성
+    // [개선] 매직 스트링 대신 상수 사용
     const orderSql = `INSERT INTO orders (user_id, delivery_info, total_price, status) VALUES (?, ?, ?, ?)`;
     const [orderResult] = await conn.query(orderSql, [
       userId,
       JSON.stringify(delivery_info),
       totalPrice,
-      "결제완료",
+      ORDER_STATUS.PAYMENT_PENDING, // "결제대기" -> 상수
     ]);
     const orderId = orderResult.insertId;
 
-    // 4. order_details 테이블에 주문 상품 상세 정보 저장
-    const orderDetailsSql = `INSERT INTO order_details (order_id, book_id, quantity, price) VALUES ?`;
-    const orderDetailsValues = itemsToOrder.map((item) => [
-      orderId,
-      item.book_id,
-      item.quantity,
-      item.price,
-    ]);
-    await conn.query(orderDetailsSql, [orderDetailsValues]);
+    await insertOrderDetails(conn, orderId, itemsToOrder);
 
-    // 5. 장바구니에서 주문한 상품 삭제
-    const deleteCartSql = `DELETE FROM carts WHERE id IN (?)`;
-    await conn.query(deleteCartSql, [cart_item_ids]);
+    const deleteCartSql = `DELETE FROM carts WHERE user_id = ? AND id IN (?)`;
+    await conn.query(deleteCartSql, [userId, cart_item_ids]);
 
     await conn.commit();
     return { order_id: orderId, message: "주문이 성공적으로 완료되었습니다." };
@@ -56,17 +92,49 @@ exports.findByUserId = async (userId) => {
   return orders;
 };
 
+/**
+ * [개선] 주문 상세 정보를 한 번의 쿼리로 조회하도록 최적화
+ */
 exports.findOrderDetailsById = async (orderId) => {
-  const orderSql = `SELECT * FROM orders WHERE id = ?`;
-  const [orderResult] = await dbPool.query(orderSql, [orderId]);
-  const order = orderResult[0];
+  const sql = `
+    SELECT 
+        o.id, o.user_id, o.delivery_info, o.total_price, o.status, o.created_at,
+        od.book_id, b.title, od.quantity, od.price as price_at_order
+    FROM orders o
+    JOIN order_details od ON o.id = od.order_id
+    JOIN books b ON od.book_id = b.id
+    WHERE o.id = ?`;
+  const [results] = await dbPool.query(sql, [orderId]);
 
-  if (!order) return null;
+  if (results.length === 0) {
+    return null;
+  }
 
-  const detailsSql = `SELECT od.book_id, b.title, od.quantity, od.price FROM order_details od JOIN books b ON od.book_id = b.id WHERE od.order_id = ?`;
-  const [details] = await dbPool.query(detailsSql, [orderId]);
+  // 쿼리 결과를 기반으로 주문 객체 재구성
+  const order = {
+    id: results[0].id,
+    user_id: results[0].user_id,
+    delivery_info: JSON.parse(results[0].delivery_info),
+    total_price: results[0].total_price,
+    status: results[0].status,
+    created_at: results[0].created_at,
+    books: results.map((row) => ({
+      book_id: row.book_id,
+      title: row.title,
+      quantity: row.quantity,
+      price: row.price_at_order,
+    })),
+  };
 
-  order.delivery_info = JSON.parse(order.delivery_info);
-  order.books = details;
   return order;
+};
+
+/**
+ * [신규] 특정 주문의 상태를 업데이트하는 함수
+ * @returns {Promise<number>} 영향을 받은 행의 수
+ */
+exports.updateOrderStatus = async (orderId, status) => {
+  const sql = "UPDATE orders SET status = ? WHERE id = ?";
+  const [result] = await dbPool.query(sql, [status, orderId]);
+  return result.affectedRows;
 };

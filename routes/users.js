@@ -2,7 +2,8 @@ const express = require("express");
 const router = express.Router();
 const { body, param } = require("express-validator");
 const userController = require("../modules/users/user.controller");
-const { authenticateJWT } = require("../middleware/auth.middleware");
+const { authenticateJWT } = require("../middleware/authorize.middleware");
+const { authorizeAdmin } = require("../middleware/authorizeAdmin.middleware"); // [추가]
 const validate = require("../middleware/validator.middleware");
 
 // --- 인증이 필요 없는 라우트 ---
@@ -40,8 +41,23 @@ router.use(authenticateJWT);
 // 로그아웃
 router.post("/logout", userController.logout);
 
-// 전체 회원 조회 (관리자용)
-router.get("/", userController.getAllUsers);
+// 모든 사용자 목록 조회 (관리자 전용)
+// authenticateJWT -> authorizeAdmin 순서로 미들웨어를 실행합니다.
+router.get("/", authenticateJWT, authorizeAdmin, userController.getAllUsers);
+
+// 특정 사용자의 역할 변경 (관리자 전용)
+router.put(
+  "/:userId/role",
+  authorizeAdmin,
+  [
+    param("userId").isInt().withMessage("유효한 사용자 ID를 입력하세요."),
+    body("role")
+      .isIn(["member", "admin"])
+      .withMessage("유효한 역할('member' 또는 'admin')을 입력하세요."),
+    validate,
+  ],
+  userController.updateUserRole
+);
 
 // 인증된 사용자 본인 정보 조회
 router.get("/me", userController.getMe);

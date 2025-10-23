@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const bookController = require("../modules/books/book.controller");
-const { authenticateJWT } = require("../middleware/auth.middleware");
+const { authenticateJWT } = require("../middleware/authorize.middleware");
 
 // [신규] 도서 검색 (검색어와 카테고리를 기반으로 도서 목록 조회)
 router.get("/search", bookController.searchBooks);
