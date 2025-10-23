@@ -42,6 +42,7 @@ const insertOrderDetails = (conn, orderId, items) => {
 exports.create = async ({ userId, delivery_info, cart_item_ids }) => {
   const conn = await dbPool.getConnection();
   try {
+    // 트랜잭션 시작
     await conn.beginTransaction();
 
     const itemsToOrder = await findCartItemsForOrder(
@@ -76,9 +77,11 @@ exports.create = async ({ userId, delivery_info, cart_item_ids }) => {
     const deleteCartSql = `DELETE FROM carts WHERE user_id = ? AND id IN (?)`;
     await conn.query(deleteCartSql, [userId, cart_item_ids]);
 
+    // 트랜잭션 커밋
     await conn.commit();
     return { order_id: orderId, message: "주문이 성공적으로 완료되었습니다." };
   } catch (err) {
+    // 트랜잭션 롤백
     await conn.rollback();
     throw err;
   } finally {

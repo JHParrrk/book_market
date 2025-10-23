@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const bookController = require("../modules/books/book.controller");
+const reviewController = require("../modules/reviews/review.controller");
 const {
   authenticateJWT,
   authenticateIfPresent,
@@ -23,5 +24,15 @@ router.get("/:bookId", authenticateIfPresent, bookController.getBookById);
 
 // 도서 좋아요 추가/취소
 router.post("/:bookId/like", authenticateJWT, bookController.toggleBookLike);
+
+// [신규] 리뷰 작성 API
+router.post("/:bookId/reviews", authenticateJWT, reviewController.addReview);
+
+// [신규] 특정 도서의 리뷰 목록 조회 (비로그인 사용자도 가능)
+router.get(
+  "/:bookId/reviews",
+  authenticateIfPresent,
+  reviewController.getReviewsByBook
+);
 
 module.exports = router;
