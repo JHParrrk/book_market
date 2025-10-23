@@ -25,14 +25,35 @@ router.get("/:bookId", authenticateIfPresent, bookController.getBookById);
 // 도서 좋아요 추가/취소
 router.post("/:bookId/like", authenticateJWT, bookController.toggleBookLike);
 
-// [신규] 리뷰 작성 API
-router.post("/:bookId/reviews", authenticateJWT, reviewController.addReview);
-
-// [신규] 특정 도서의 리뷰 목록 조회 (비로그인 사용자도 가능)
+// [유지] 특정 도서의 리뷰 목록 조회: GET /books/:bookId/reviews
 router.get(
   "/:bookId/reviews",
   authenticateIfPresent,
   reviewController.getReviewsByBook
+);
+
+// [유지] 특정 도서에 리뷰 작성: POST /books/:bookId/reviews
+router.post("/:bookId/reviews", authenticateJWT, reviewController.addReview);
+
+// [신규] 특정 도서의 특정 리뷰 수정: PUT /books/:bookId/reviews/:reviewId
+router.put(
+  "/:bookId/reviews/:reviewId",
+  authenticateJWT,
+  reviewController.updateReview
+);
+
+// [신규] 특정 도서의 특정 리뷰 삭제: DELETE /books/:bookId/reviews/:reviewId
+router.delete(
+  "/:bookId/reviews/:reviewId",
+  authenticateJWT,
+  reviewController.deleteReview
+);
+
+// [신규] 특정 도서의 특정 리뷰 '좋아요': POST /books/:bookId/reviews/:reviewId/like
+router.post(
+  "/:bookId/reviews/:reviewId/like",
+  authenticateJWT,
+  reviewController.toggleReviewLike
 );
 
 module.exports = router;

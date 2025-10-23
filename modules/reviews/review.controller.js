@@ -40,10 +40,17 @@ exports.addReview = async (req, res, next) => {
 
 exports.updateReview = async (req, res, next) => {
   try {
-    const { reviewId } = req.params;
+    const { bookId, reviewId } = req.params; // bookId 추가
     const userId = req.user.id;
     const { content, rating } = req.body;
-    await reviewService.updateReview({ reviewId, userId, content, rating });
+
+    await reviewService.updateReview({
+      bookId, // 서비스로 전달
+      reviewId,
+      userId,
+      content,
+      rating,
+    });
     res.status(200).json({ message: "리뷰가 성공적으로 수정되었습니다." });
   } catch (err) {
     next(err);
@@ -52,19 +59,23 @@ exports.updateReview = async (req, res, next) => {
 
 exports.deleteReview = async (req, res, next) => {
   try {
-    const { reviewId } = req.params;
-    // [수정] 권한 확인을 위해 user 객체 전체를 전달
-    await reviewService.deleteReview(reviewId, req.user);
+    const { bookId, reviewId } = req.params; // bookId 추가
+
+    await reviewService.deleteReview({
+      bookId, // 서비스로 전달
+      reviewId,
+      user: req.user,
+    });
     res.status(204).send();
   } catch (err) {
     next(err);
   }
 };
 
-// [신규] 리뷰 좋아요 토글
+// 리뷰 좋아요 토글
 exports.toggleReviewLike = async (req, res, next) => {
   try {
-    const { reviewId } = req.params;
+    const { bookId, reviewId } = req.params; // bookId 추가 (향후 검증에 사용 가능)
     const userId = req.user.id;
     const result = await reviewService.toggleReviewLike(reviewId, userId);
     res.status(200).json(result);
