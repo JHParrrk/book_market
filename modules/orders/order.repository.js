@@ -1,7 +1,7 @@
 const dbPool = require("../../database/connection/mariaDB");
 const { CustomError } = require("../../utils/errorHandler.util");
 const { NOT_FOUND } = require("../../constants/errors");
-const { ORDER_STATUS } = require("../../constants/orderStatus");
+const { ORDER_STATUS } = require("../../constants/orderStatus.js");
 
 /**
  * 사용자의 장바구니에서 주문할 상품 정보를 조회 (소유권 검증 포함)

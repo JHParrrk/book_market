@@ -1,6 +1,7 @@
 const orderService = require("./order.service");
 const { CustomError } = require("../../utils/errorHandler.util");
 const { BAD_REQUEST } = require("../../constants/errors");
+const { ORDER_STATUS } = require("../../constants/orderStatus");
 
 exports.createOrder = async (req, res, next) => {
   try {
@@ -76,9 +77,12 @@ exports.updateOrderStatus = async (req, res, next) => {
     }
 
     // 2. 권한 검증 (주석 처리): 실제 운영 시에는 관리자만 접근 가능하도록 해야 합니다.
-    // if (req.user.role !== 'admin') {
-    //   throw new CustomError(FORBIDDEN.statusCode, "주문 상태를 변경할 권한이 없습니다.");
-    // }
+    if (req.user.role !== "admin") {
+      throw new CustomError(
+        FORBIDDEN.statusCode,
+        "주문 상태를 변경할 권한이 없습니다."
+      );
+    }
 
     await orderService.updateOrderStatus({ orderId, status });
 

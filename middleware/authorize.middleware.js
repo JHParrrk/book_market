@@ -31,6 +31,31 @@ function authenticateJWT(req, res, next) {
   }
 }
 
+/**
+ * [신규] 토큰이 있는 경우에만 사용자를 인증하는 미들웨어 (선택적)
+ */
+function authenticateIfPresent(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  // 토큰이 없거나 Bearer 타입이 아니면, req.user를 설정하지 않고 그냥 다음으로 넘어갑니다.
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return next();
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    // 토큰이 유효하면 req.user에 사용자 정보를 저장합니다.
+    req.user = jwt.verify(token, process.env.ACCESS_SECRET_KEY);
+  } catch (error) {
+    // 토큰이 유효하지 않더라도(만료 등) 에러를 발생시키지 않고,
+    // 로그인하지 않은 사용자와 동일하게 취급하기 위해 req.user를 설정하지 않습니다.
+  }
+
+  next();
+}
+
 module.exports = {
   authenticateJWT,
+  authenticateIfPresent,
 };

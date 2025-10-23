@@ -1,11 +1,14 @@
 const cartService = require("./cart.service");
+const { CustomError } = require("../../utils/errorHandler.util");
+const { BAD_REQUEST } = require("../../constants/errors");
 
 exports.addToCart = async (req, res, next) => {
   try {
     const { book_id, quantity } = req.body;
 
-    // [개선] 입력값 검증
+    // [강화] 입력값 검증
     if (!book_id || !quantity || Number(quantity) < 1) {
+      // 이제 CustomError를 정상적으로 사용할 수 있습니다.
       throw new CustomError(
         BAD_REQUEST.statusCode,
         "도서 ID와 1 이상의 수량을 정확히 입력해주세요."
@@ -39,7 +42,7 @@ exports.updateCartItem = async (req, res, next) => {
     const { cartItemId } = req.params;
     const { quantity } = req.body;
 
-    // [개선] 입력값 검증
+    // [강화] 입력값 검증
     if (!quantity || Number(quantity) < 1) {
       throw new CustomError(
         BAD_REQUEST.statusCode,
@@ -58,6 +61,7 @@ exports.updateCartItem = async (req, res, next) => {
     next(err);
   }
 };
+
 exports.removeCartItem = async (req, res, next) => {
   try {
     const { cartItemId } = req.params;

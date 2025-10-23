@@ -1,10 +1,14 @@
+// book_market/modules/carts/cart.repository.js
+
 const dbPool = require("../../database/connection/mariaDB");
 
 exports.upsertCartItem = ({ userId, book_id, quantity }) => {
   const sql = `
     INSERT INTO carts (user_id, book_id, quantity) VALUES (?, ?, ?)
     ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)`;
-  return dbPool.query(sql, [userId, book_id, quantity]);
+
+  // [수정] VALUES(quantity)가 참조할 수 있도록 quantity를 한 번 더 전달합니다.
+  return dbPool.query(sql, [userId, book_id, quantity, quantity]);
 };
 
 exports.findCartItemsByUserId = async (userId) => {

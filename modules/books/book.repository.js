@@ -1,3 +1,5 @@
+// book.repository.js
+
 const dbPool = require("../../database/connection/mariaDB");
 const {
   DEFAULT_PAGE,
@@ -14,12 +16,20 @@ const {
 const applyCategoryFilter = (category_id, params) => {
   if (!category_id) return "";
 
-  params.push(category_id, category_id);
+  params.push(category_id);
+  // 재귀 CTE를 사용하여 특정 카테고리 및 모든 하위 카테고리를 조회하도록 수정
   return ` AND b.category_id IN (
-            SELECT id FROM categories WHERE id = ? OR parent_id = ?
+              WITH RECURSIVE CategoryTree AS (
+                  -- 1. 시작점: 사용자가 선택한 카테고리
+                  SELECT id FROM categories WHERE id = ?
+                  UNION ALL
+                  -- 2. 재귀 부분: 직전 단계에서 찾은 카테고리를 부모로 하는 자식 카테고리를 계속해서 찾음
+                  SELECT c.id FROM categories c
+                  JOIN CategoryTree ct ON c.parent_id = ct.id
+              )
+              SELECT id FROM CategoryTree
           )`;
 };
-
 // [수정] 도서 검색 쿼리
 exports.searchBooks = async ({
   category_id,
